@@ -1,0 +1,32 @@
+services:
+  redis:
+    image: redis:6.0-alpine
+    container_name: redis_broker
+    ports:
+      - "6379:6379" # Redis default port, access at redis://localhost:6379
+    volumes:
+      - redis_data:/data
+
+  worker:
+    build: .
+    container_name: celery-worker
+    command: celery -A worker worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      
+    env_file:
+      - .env
+
+volumes:
+  redis_data:
+
+
+
+  

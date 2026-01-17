@@ -1,4 +1,9 @@
-export async function GetStorefrontData(query: string, variables = {}) {
+export async function GetStorefrontData(
+  storefrontURL: string,
+  accessToken: string,
+  query: string,
+  variables: Record<string, any> = {},
+) {
   // Fallback: call Shopify Storefront API directly using server-side env vars
   const response = await fetch(
     `https://${process.env.NEXT_SHOPIFY_STORE_DOMAIN}/api/2026-01/graphql.json`,
@@ -10,7 +15,7 @@ export async function GetStorefrontData(query: string, variables = {}) {
           .SHOPIFY_GRAPHQL_ACCESS_TOKEN as string,
       },
       body: JSON.stringify({ query, variables }),
-    }
+    },
   )
     .then((res) => res.json())
     .catch((error) => {

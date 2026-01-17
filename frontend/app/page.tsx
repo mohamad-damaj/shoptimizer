@@ -1,34 +1,40 @@
 "use server";
 
-import { GetStorefrontData } from "@/utils/ShopifyGet";
-import { STOREFRONT_PRODUCTS_QUERY } from "@/utils/queries";
+import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default async function Home() {
-  const data = await GetStorefrontData(STOREFRONT_PRODUCTS_QUERY);
-  let productString = "";
-
-  try {
-    // Try to build a readable string from the returned data
-    const edges = data?.data?.products?.edges || [];
-    const titles = edges.map((e: any) => e?.node?.title).filter(Boolean);
-
-    productString = titles.length ? titles.join(", ") : "No products found";
-  } catch (err) {
-    console.error("Error loading storefront data:", err);
-    productString = "Failed to load storefront data";
-  }
-
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Storefront products</h1>
-      <p className="mb-4">{productString}</p>
-
-      <details>
-        <summary className="cursor-pointer">Raw response (debug)</summary>
-        <pre className="mt-2 max-h-96 overflow-auto">
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      </details>
+      <form
+        action={handleStorefrontSubmit}
+        className="flex flex-col gap-4 justify-center max-w-5xl"
+      >
+        <Input
+          type="text"
+          name="storefront_url"
+          placeholder="myshop.myshopify.com"
+          required
+        />
+        <Input
+          type="text"
+          name="access_token"
+          placeholder="010101010101"
+          required
+        />
+        <Button type="submit">Submit</Button>
+      </form>
     </div>
+  );
+}
+
+export async function handleStorefrontSubmit(formData: FormData) {
+  const storefrontUrl = formData.get("storefront_url") as string;
+  const accessToken = formData.get("access_token") as string;
+
+  // redirect to a new page with the provided storefront URL and access token
+  redirect(
+    `/scene?storefront_url=${encodeURIComponent(storefrontUrl)}&access_token=${encodeURIComponent(accessToken)}`,
   );
 }

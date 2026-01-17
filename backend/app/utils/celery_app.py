@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from celery import Celery
 
-from backend.utils.config import settings
+from app.utils.config import settings
 
 celery_app = Celery(
     "worker",

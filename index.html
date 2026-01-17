@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Product Browser</title>
+    <style>
+        :root {
+            --accent: #007aff;
+            --bg: #0a0a0a;
+            --panel: rgba(20, 20, 20, 0.8);
+        }
+        body { margin: 0; background-color: var(--bg); overflow: hidden; font-family: 'Inter', -apple-system, sans-serif; color: white; }
+        
+        /* Browser UI Elements */
+        #product-card {
+            position: absolute;
+            top: 50%;
+            left: 50px;
+            transform: translateY(-50%);
+            width: 320px;
+            background: var(--panel);
+            backdrop-filter: blur(15px);
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 100;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .badge { background: var(--accent); padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+        h1 { margin: 15px 0 10px 0; font-size: 24px; }
+        p { color: #999; line-height: 1.6; font-size: 14px; }
+        .controls-hint { margin-top: 20px; font-size: 12px; color: var(--accent); border-top: 1px solid #333; padding-top: 15px; }
+        
+        #nav-arrows {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+        .arrow {
+            background: var(--panel);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 24px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .arrow:hover { background: var(--accent); transform: scale(1.1); }
+    </style>
+</head>
+<body>
+
+    <div id="product-card">
+        <span class="badge">CURATED COLLECTION</span>
+        <h1 id="p-title">Amber Glass Ashtray</h1>
+        <p id="p-desc">A mid-century masterpiece featuring hand-blown amber glass and polished brass accents. Designed for the modern collector.</p>
+        <div class="controls-hint">Drag to rotate • Scroll to zoom</div>
+    </div>
+
+    <div id="nav-arrows">
+        <button class="arrow" onclick="prevProduct()">←</button>
+        <button class="arrow" onclick="nextProduct()">→</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        let scene, camera, renderer, controls, displayGroup, currentProduct;
+
+        const theme = {
+            accent: 0x007aff,
+            floor: 0x111111,
+            lightIntensity: 1.8
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.Fog(0x050505, 15, 45);
+
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // POSITION FIX: Set to a professional 3/4 studio angle
+            camera.position.set(-0.2, 7.93, 20.7);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            // CAMERA AUTO-ROTATE: Commented out as requested
+            // controls.autoRotate = true; 
+            // controls.autoRotateSpeed = 0.5;
+            controls.maxPolarAngle = Math.PI / 2.1; 
+            controls.target.set(0, 2.5, 0); 
+            controls.update();
+
+            setupLighting();
+            setupEnvironment();
+            createContainer()
+            createContainer();
+
+            animate();
+        }
+
+        function setupLighting() {
+            // Brighter Ambient
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambient);
+
+            // Strong Main Key Light
+            const keyLight = new THREE.SpotLight(0xffffff, 2.5);
+            keyLight.position.set(10, 20, 10);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width = 2048;
+            scene.add(keyLight);
+
+            // Fill Light (Blueish tint for "Modern" feel)
+            const fillLight = new THREE.PointLight(theme.accent, 1.2, 20);
+            fillLight.position.set(-10, 5, 5);
+            scene.add(fillLight);
+
+            // Back/Rim Light
+            const rimLight = new THREE.DirectionalLight(0xffffff, 1);
+            rimLight.position.set(0, 5, -10);
+            scene.add(rimLight);
+        }
+
+        function setupEnvironment() {
+            // Reflective Studio Floor
+            const floorGeo = new THREE.PlaneGeometry(100, 100);
+            const floorMat = new THREE.MeshPhysicalMaterial({
+                color: theme.floor,
+                metalness: 0.9,
+                roughness: 0.1,
+                clearcoat: 1
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Subtle Grid
+            const grid = new THREE.GridHelper(50, 40, 0x222222, 0x111111);
+            grid.position.y = 0.02;
+            scene.add(grid);
+        }
+
+        function createContainer() {
+            displayGroup = new THREE.Group();
+            
+            // Base/Pedestal
+            const baseGeo = new THREE.CylinderGeometry(2.5, 2.7, 0.4, 64);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x151515, metalness: 0.8, roughness: 0.2 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.2;
+            base.receiveShadow = true;
+            displayGroup.add(base);
+
+            // Glass Shell
+            const glassGeo = new THREE.CylinderGeometry(2.3, 2.3, 5, 64, 1, true);
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                transmission: 0.95,
+                thickness: 0.5,
+                ior: 1.5,
+                transparent: true,
+                opacity: 0.2,
+                side: THREE.DoubleSide
+            });
+            const glass = new THREE.Mesh(glassGeo, glassMat);
+            glass.position.y = 2.9;
+            displayGroup.add(glass);
+
+            scene.add(displayGroup);
+            
+            // --- PLACEHOLDER SPACE ---
+            // This is where your generated 'productGroup' will sit.
+            // Height offset should be approx y = 2.5
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            console.log(camera.position.x, camera.position.y, camera.position.z)
+        }
+
+        // Navigation Logic Stubs
+        function nextProduct() { console.log("Slide to next product..."); }
+        function prevProduct() { console.log("Slide to prev product..."); }
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+    </script>
+</body>
+</html>

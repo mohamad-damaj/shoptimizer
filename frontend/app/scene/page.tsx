@@ -1,120 +1,392 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Text, Box } from "@react-three/drei";
-import { GetStorefrontData } from "@/utils/ShopifyGet";
-import { STOREFRONT_PRODUCTS_QUERY } from "@/utils/queries";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
-type ProductNode = { id: string; title?: string };
-type ProductEdge = { node?: ProductNode };
-
-function ProductBox({ position, title }: { position: [number, number, number]; title: string }) {
-  return (
-    <group position={position}>
-      <Box args={[1, 1, 1]} castShadow>
-        <meshStandardMaterial color="#2e7d32" />
-      </Box>
-      <Text position={[0, 1.5, 0]} fontSize={0.3} color="#ffffff" anchorX="center">
-        {title}
-      </Text>
-    </group>
-  );
+// types 
+interface ProductData {
+  id: string;
+  title: string;
+  description: string;
+  aiCode: string;
 }
 
-function Scene3D({ products }: { products: ProductEdge[] }) {
-  return (
-    <>
-      <Canvas
-        camera={{ position: [0, 5, 8], fov: 75 }}
-        style={{ width: "100%", height: "100vh" }}
-      >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-        
-        {/* Ground plane */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
-          <planeGeometry args={[100, 100]} />
-          <meshStandardMaterial color="#f1f8f5" />
-        </mesh>
-
-        {/* Product boxes */}
-        {products.map((product, index) => {
-          const row = Math.floor(index / 3);
-          const col = index % 3;
-          const x = (col - 1) * 3;
-          const z = row * 3;
-          const title = product?.node?.title || `Product ${index + 1}`;
-          
-          return (
-            <ProductBox
-              key={product?.node?.id || index}
-              position={[x, 0, z]}
-              title={title.substring(0, 20)}
-            />
-          );
-        })}
-
-        <OrbitControls />
-      </Canvas>
-    </>
-  );
+interface ProductBrowserProps {
+  product: ProductData;
+  onNext: () => void;
+  onPrev: () => void;
 }
 
-export default function Scene() {
-  const searchParams = useSearchParams();
-  const storefrontUrl = searchParams.get("storefront_url") as string;
-  const accessToken = searchParams.get("access_token") as string;
-
-  const [products, setProducts] = useState<ProductEdge[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// 3d viewer child
+const ProductBrowser: React.FC<ProductBrowserProps> = ({ product, onNext, onPrev }) => {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const aiModelRef = useRef<THREE.Group | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const data = await GetStorefrontData(
-          storefrontUrl,
-          accessToken,
-          STOREFRONT_PRODUCTS_QUERY,
-          {},
-        );
-        setProducts(data?.data?.products?.edges || []);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch products",
-        );
-      } finally {
-        setLoading(false);
-      }
+    if (!mountRef.current) return;
+
+    // setting scene up
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
+    const bgColor = new THREE.Color(0xe8d8c0); 
+    scene.background = bgColor;
+    scene.fog = new THREE.Fog(bgColor, 20, 60); 
+
+    const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(-0.2, 7.93, 20.7);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    rendererRef.current = renderer;
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding; 
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.3;
+    mountRef.current.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 2.5, 0); 
+    controls.maxPolarAngle = Math.PI / 2.1;
+    controls.update();
+
+    // 2. LIGHTING
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambient);
+
+    const keyLight = new THREE.DirectionalLight(0xfff0dd, 1.8);
+    keyLight.position.set(10, 20, 15);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.0001;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.SpotLight(0xddeeff, 0.8);
+    fillLight.position.set(-15, 10, 5);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.SpotLight(0xffffff, 1.2);
+    rimLight.position.set(0, 15, -20);
+    rimLight.lookAt(0, 0, 0);
+    scene.add(rimLight);
+
+    // 3. BACKGROUND DECOR
+    const bgGroup = new THREE.Group();
+    const matArch = new THREE.MeshPhysicalMaterial({ color: 0xcba987, roughness: 0.9 }); 
+    const matSphere1 = new THREE.MeshPhysicalMaterial({ color: 0xdba392, roughness: 0.8 }); 
+    const matSphere2 = new THREE.MeshPhysicalMaterial({ color: 0xc9b891, roughness: 0.7 }); 
+
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(8, 0.5, 16, 100), matArch);
+    torus.position.set(0, 5, -15);
+    torus.rotation.x = Math.PI / 8;
+    bgGroup.add(torus);
+
+    const sphere1 = new THREE.Mesh(new THREE.SphereGeometry(3, 32, 32), matSphere1);
+    sphere1.position.set(-12, 2, -10);
+    bgGroup.add(sphere1);
+
+    const sphere2 = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), matSphere2);
+    sphere2.position.set(12, 6, -8);
+    bgGroup.add(sphere2);
+    scene.add(bgGroup);
+
+    // 4. FLOOR
+    const floorGeo = new THREE.PlaneGeometry(200, 200);
+    const floorMat = new THREE.MeshPhysicalMaterial({
+      color: 0xe0d0b8, 
+      metalness: 0.1,
+      roughness: 0.2,
+      clearcoat: 0.1,
+      reflectivity: 0.2
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // 5. CONTAINER (GLASS)
+    const containerGroup = new THREE.Group();
+    const baseGeo = new THREE.CylinderGeometry(2.6, 2.8, 0.2, 64);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.2 });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.y = 0.1;
+    base.castShadow = true;
+    base.receiveShadow = true;
+    containerGroup.add(base);
+
+    const glassGeo = new THREE.CylinderGeometry(2.5, 2.5, 5.2, 64, 1, true);
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      transmission: 0.98,
+      thickness: 0.5,
+      ior: 1.45,
+      roughness: 0.02,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const glass = new THREE.Mesh(glassGeo, glassMat);
+    glass.position.y = 2.7;
+    glass.renderOrder = 2; // RENDER AFTER OBJECT
+    containerGroup.add(glass);
+    scene.add(containerGroup);
+
+    // 6. ANIMATION
+    const animate = () => {
+      if (!rendererRef.current) return;
+      requestAnimationFrame(animate);
+      const time = Date.now() * 0.0005;
+      sphere1.position.y = 2 + Math.sin(time) * 0.5;
+      sphere2.position.y = 6 + Math.cos(time * 0.8) * 0.5;
+      controls.update();
+      rendererRef.current.render(scene, camera);
     };
+    animate();
 
-    if (storefrontUrl && accessToken) {
-      fetchProducts();
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      rendererRef.current?.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      renderer.dispose();
+      mountRef.current?.removeChild(renderer.domElement);
+    };
+  }, []);
+
+  // --- HYDRATION: LISTEN FOR 'product.aiCode' CHANGE ---
+  useEffect(() => {
+    if (product.aiCode && sceneRef.current) {
+      if (aiModelRef.current) sceneRef.current.remove(aiModelRef.current);
+      
+      try {
+        const creatorFunction = new Function('THREE', product.aiCode);
+        const newModel = creatorFunction(THREE);
+        
+        newModel.traverse((node: any) => {
+            if (node.isMesh) {
+                node.geometry.computeBoundingSphere();
+                node.geometry.computeBoundingBox();
+                node.frustumCulled = false; 
+                node.castShadow = true;
+                node.receiveShadow = true;
+                node.renderOrder = 1; // RENDER BEFORE GLASS
+                if (node.material) {
+                    node.material.side = THREE.DoubleSide;
+                    if (node.material.transparent) {
+                        node.material.depthWrite = true; 
+                    }
+                }
+            }
+        });        
+        
+        newModel.position.set(0, 2.5, 0); 
+        sceneRef.current.add(newModel);
+        aiModelRef.current = newModel;
+      } catch (err) {
+        console.error("3D Hydration failed:", err);
+      }
     }
-  }, [storefrontUrl, accessToken]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center w-full h-screen bg-white">
-        <p className="text-green-900 text-xl">Loading products...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center w-full h-screen bg-white">
-        <p className="text-red-600 text-xl">Error: {error}</p>
-      </div>
-    );
-  }
+  }, [product.aiCode]); // <--- Only runs when the code string changes
 
   return (
-    <div style={{ width: "100%", height: "100vh", margin: 0, padding: 0 }}>
-      <Scene3D products={products} />
+    <div style={styles.container}>
+      <div style={styles.productCard}>
+        <span style={styles.badge}>Curated</span>
+        <h1 style={styles.title}>{product.title}</h1>
+        <p style={styles.description}>{product.description}</p>
+        <div style={styles.controlsHint}>Drag to Rotate • Scroll to Zoom</div>
+      </div>
+
+      <div style={styles.navArrows}>
+        <button style={styles.arrow} onClick={onPrev}>←</button>
+        <button style={styles.arrow} onClick={onNext}>→</button>
+      </div>
+
+      <div ref={mountRef} style={{ width: '100%', height: '100vh' }} />
     </div>
   );
+};
 
+
+// --- PARENT COMPONENT: DATA MANAGER ---
+export default function ScenePage() {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // --- HARDCODED PRODUCT LIST ---
+  const products: ProductData[] = [
+    {
+      id: "1",
+      title: "Golden Torus",
+      description: "A mathematical marvel rendered in brushed gold. Notice how the complex topology catches the warm terracotta lighting.",
+      aiCode: `
+        const group = new THREE.Group();
+        const geo = new THREE.TorusKnotGeometry(0.7, 0.25, 128, 32);
+        const mat = new THREE.MeshPhysicalMaterial({ 
+          color: 0xdfa855, 
+          transmission: 0, 
+          roughness: 0.15,
+          metalness: 0.6,
+          clearcoat: 1.0
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        group.add(mesh);
+        return group;
+      `
+    },
+    {
+      id: "2",
+      title: "Obsidian Monolith",
+      description: "A dark, mysterious form carved from volcanic glass. The sharp edges contrast beautifully with the soft environment.",
+      aiCode: `
+        const group = new THREE.Group();
+        const geo = new THREE.IcosahedronGeometry(0.9, 0);
+        const mat = new THREE.MeshPhysicalMaterial({ 
+          color: 0x111111, 
+          roughness: 0.0,
+          metalness: 0.1,
+          transmission: 0.2,
+          thickness: 1.5,
+          clearcoat: 1.0
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.y = 0.5;
+        group.add(mesh);
+        return group;
+      `
+    },
+    {
+      id: "3",
+      title: "Ceramic Abstract",
+      description: "Hand-turned white clay with a raw, matte finish. Represents the fusion of traditional craft and digital generation.",
+      aiCode: `
+        const group = new THREE.Group();
+        // A stack of cylinders to look like a vase
+        const g1 = new THREE.CylinderGeometry(0.5, 0.8, 0.8, 32);
+        const g2 = new THREE.CylinderGeometry(0.8, 0.4, 0.8, 32);
+        const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+        
+        const m1 = new THREE.Mesh(g1, m);
+        const m2 = new THREE.Mesh(g2, m);
+        m1.position.y = -0.4;
+        m2.position.y = 0.4;
+        
+        group.add(m1);
+        group.add(m2);
+        return group;
+      `
+    }
+  ];
+
+  // --- NAVIGATION LOGIC ---
+  const handleNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % products.length);
+  };
+
+  const handlePrev = () => {
+    setCurrentIndex((prev) => (prev - 1 + products.length) % products.length);
+  };
+
+  return (
+    <main>
+      <ProductBrowser 
+        product={products[currentIndex]} 
+        onNext={handleNext} 
+        onPrev={handlePrev} 
+      />
+    </main>
+  );
+}
+
+// --- STYLES ---
+const styles: { [key: string]: React.CSSProperties } = {
+  container: {
+    position: 'relative',
+    width: '100vw',
+    height: '100vh',
+    overflow: 'hidden',
+    backgroundColor: '#e8d8c0',
+  },
+  productCard: {
+    position: 'absolute',
+    top: '50%',
+    left: '60px',
+    transform: 'translateY(-50%)',
+    width: '340px',
+    backgroundColor: 'rgba(248, 245, 240, 0.65)', 
+    backdropFilter: 'blur(20px)',
+    padding: '40px',
+    borderRadius: '24px',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+    zIndex: 100,
+    boxShadow: '0 20px 40px rgba(0,0,0,0.04)',
+    color: '#333'
+  },
+  badge: {
+    color: '#9c8a76',
+    fontSize: '11px',
+    fontWeight: '700',
+    letterSpacing: '2px',
+    textTransform: 'uppercase',
+    border: '1px solid #9c8a76',
+    padding: '4px 8px',
+    borderRadius: '4px'
+  },
+  title: {
+    margin: '20px 0 10px 0',
+    fontSize: '32px',
+    fontFamily: 'serif',
+    fontWeight: '500',
+    color: '#2a2520'
+  },
+  description: {
+    color: '#6a6560',
+    lineHeight: '1.6',
+    fontSize: '15px',
+    fontWeight: '400'
+  },
+  controlsHint: {
+    marginTop: '30px',
+    fontSize: '10px',
+    color: '#a89e95',
+    borderTop: '1px solid rgba(0,0,0,0.05)',
+    paddingTop: '20px',
+    textTransform: 'uppercase',
+    letterSpacing: '1.5px'
+  },
+  navArrows: {
+    position: 'absolute',
+    bottom: '60px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    gap: '20px',
+    zIndex: 100
+  },
+  arrow: {
+    backgroundColor: '#fff',
+    border: '1px solid rgba(0,0,0,0.05)',
+    width: '60px',
+    height: '60px',
+    borderRadius: '50%',
+    cursor: 'pointer',
+    fontSize: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+    color: '#333',
+    transition: 'all 0.2s ease'
+  }
+};

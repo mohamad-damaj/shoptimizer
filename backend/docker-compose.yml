@@ -35,11 +35,6 @@ services:
       - PYTHONPATH=/backend
     env_file:
       - .env
-    networks:
-      - shoppy_network
 
 volumes:
   redis_data:
-
-networks:
-  shoppy_network:

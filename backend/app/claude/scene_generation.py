@@ -4,15 +4,14 @@ import json
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
-from google import genai
-from google.genai import types
-from PIL import Image
-
 from app.claude.prompt import base_prompt, system_prompt_3d_obj
 from app.config import DEFAULT_TEMP, MAX_TOKENS, AsyncAITask, GenericPromptTask
 from app.utils.celery_app import celery_app
-from app.utils.settings import settings
 from app.utils.redis import redis_service
+from app.utils.settings import settings
+from google import genai
+from google.genai import types
+from PIL import Image
 
 # Default model configuration for Gemini
 DEFAULT_MODEL = "gemini-3-flash-preview"
@@ -92,15 +91,13 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
                 response_modalities=["Text"],
                 temperature=temperature,
                 max_output_tokens=max_tokens,
+                system_instruction=prompt,
             )
 
             # we generate the 3D product visualization
             response = await client.aio.models.generate_content(
-                model=DEFAULT_MODEL,
-                contents=contents,
-                config=config,
-                system=prompt
-                )
+                model=DEFAULT_MODEL, contents=contents, config=config
+            )
 
             # Extract any text content
             text_content = response.text if hasattr(response, "text") else ""
@@ -160,19 +157,19 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
     ) -> str:
         """Build a detailed prompt for product visualization."""
         theme_style = ""
+        prompt = None
         if shop_theme:
             colors = shop_theme.get("colors", {})
             style = shop_theme.get("style", "modern")
             theme_style = f"\n\nShop Theme: {style} style with colors {colors}"
 
             prompt = system_prompt_3d_obj(
-                product_name, 
+                product_name,
                 product_type,
-                product_description, 
-                product_tags, 
-                theme_style
-                )
-
+                product_description,
+                product_tags,
+                theme_style,
+            )
 
         return prompt
 

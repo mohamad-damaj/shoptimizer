@@ -3,9 +3,8 @@ DEFAULT_TEMP = 0.7
 import asyncio
 from typing import Any, Dict, Optional, Protocol
 
-from celery import Task
-
 from app.utils.redis import redis_service
+from celery import Task
 
 
 class AsyncClient(Protocol):

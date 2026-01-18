@@ -3,12 +3,11 @@ import re
 import time
 
 import requests
-
-from backend.claude.scene_generation import (
+from app.claude.scene_generation import (
     ShopifyProductTo3DTask,
     ShopifySceneGenerationTask,
 )
-from backend.utils.redis import redis_service
+from app.utils.redis import redis_service
 
 
 def extract_javascript_code(metadata_string):
@@ -33,7 +32,7 @@ response.raise_for_status()
 
 encoded_string = base64.b64encode(response.content).decode("utf-8")
 
-products_dict = {"featured_image": image_url, "image_base64": encoded_string}
+products_dict = {"image_url": image_url, "image_base64": encoded_string}
 
 result = ShopifyProductTo3DTask.apply_async(args=(1, products_dict))
 
@@ -42,7 +41,7 @@ while not result.ready():
     time.sleep(5)
 
 final = result.result
-
+breakpoint()
 raw_code = final["metadata"]
 
 

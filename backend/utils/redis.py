@@ -2,9 +2,8 @@ import json
 import time
 from typing import Any, Dict
 
+from app.utils.config import settings
 from redis import Redis
-
-from backend.utils.config import settings
 
 
 class RedisService:

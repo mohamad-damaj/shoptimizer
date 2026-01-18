@@ -3,10 +3,9 @@
 import logging
 from contextlib import asynccontextmanager
 
+from app.api.routes import router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from app.api.routes import router
 
 # Configure logging
 logging.basicConfig(

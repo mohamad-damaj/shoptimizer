@@ -1,5 +1,5 @@
-MAX_TOKENS = 4096
-DEFAULT_TEMP = 0.7
+MAX_TOKENS = 409600
+DEFAULT_TEMP = 0
 import asyncio
 from typing import Any, Dict, Optional, Protocol
 

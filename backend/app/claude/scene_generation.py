@@ -4,7 +4,7 @@ import json
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
-from app.claude.prompt import base_prompt, system_prompt_3d_obj
+from app.claude.prompt import system_prompt_3d_obj
 from app.config import DEFAULT_TEMP, MAX_TOKENS, AsyncAITask, GenericPromptTask
 from app.utils.celery_app import celery_app
 from app.utils.redis import redis_service
@@ -76,7 +76,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
             )
 
             # Prepare content with product image if available
-            contents = [base_prompt]
+            contents = [prompt]
             if product_image_url and product_data.get("image_base64"):
                 try:
                     image = Image.open(
@@ -91,12 +91,13 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
                 response_modalities=["Text"],
                 temperature=temperature,
                 max_output_tokens=max_tokens,
-                system_instruction=prompt,
             )
 
             # we generate the 3D product visualization
             response = await client.aio.models.generate_content(
-                model=DEFAULT_MODEL, contents=contents, config=config
+                model=DEFAULT_MODEL,
+                contents=contents,
+                config=config,
             )
 
             # Extract any text content
@@ -156,20 +157,14 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
         shop_theme: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build a detailed prompt for product visualization."""
-        theme_style = ""
-        prompt = None
-        if shop_theme:
-            colors = shop_theme.get("colors", {})
-            style = shop_theme.get("style", "modern")
-            theme_style = f"\n\nShop Theme: {style} style with colors {colors}"
 
-            prompt = system_prompt_3d_obj(
-                product_name,
-                product_type,
-                product_description,
-                product_tags,
-                theme_style,
-            )
+        prompt = system_prompt_3d_obj(
+            product_name,
+            product_type,
+            product_description,
+            product_tags,
+            shop_theme,
+        )
 
         return prompt
 

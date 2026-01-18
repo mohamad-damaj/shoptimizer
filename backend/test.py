@@ -23,16 +23,19 @@ def extract_javascript_code(metadata_string):
     return metadata_string.strip()
 
 
-image_url = (
-    "https://www.houseplant.com/cdn/shop/files/Amberlifestyle_1512x.png?v=1737983509"
-)
+image_url = "https://www.houseplant.com/cdn/shop/files/Q42024_PDP_Standing_Ashtray_1_1512x.jpg?v=1759936813"
 
 response = requests.get(image_url)
 response.raise_for_status()
 
 encoded_string = base64.b64encode(response.content).decode("utf-8")
 
-products_dict = {"image_url": image_url, "image_base64": encoded_string}
+products_dict = {
+    "product_name": "Ash and Scent Set",
+    "product_description": "Curated by Seth and inspired by his trip to Grasse, France. Hand-sculpted marble ashtray that doubles as an incense burner. Meet your new go-to for sparking up in style. With 64× droplets included, that’s 640+ minutes of luxurious aromatic escape.",
+    "image_url": image_url,
+    "image_base64": encoded_string,
+}
 
 result = ShopifyProductTo3DTask.apply_async(args=(1, products_dict))
 
@@ -41,15 +44,13 @@ while not result.ready():
     time.sleep(5)
 
 final = result.result
-breakpoint()
 raw_code = final["metadata"]
 
 
 js_code = extract_javascript_code(raw_code)
 
-breakpoint()
 print("--- Extracted JS Code ---")
-print(js_code[:200] + "...")  # Preview
+print([js_code])  # Preview
 
 # result = ShopifyProductTo3DTask.run(1, products_dict)
 # print(result)

@@ -1,7 +1,6 @@
 def system_prompt_3d_obj(
     product_name, product_type, product_description, product_tags, theme_style
 ):
-
     tags_str = ", ".join(product_tags) if product_tags else "None"
     theme_block = f"\nTheme Style: {theme_style}" if theme_style else ""
 
@@ -20,32 +19,70 @@ def system_prompt_3d_obj(
     Tags: {tags_str}{theme_block}
 
     ## TECHNICAL IMPLEMENTATION:    
-    - Do not import any libraries. They have already been imported for you.
+    - DO NOT import any libraries. They have already been imported for you.
     - Create a properly structured Three.js object (not scene) with no lighting setup
-    - Do not include any orbital controls
+    - DO NOT include any orbital controls
     - Apply realistic materials and textures based on the colors and patterns in the drawing
     - Create proper hierarchy of objects with parent-child relationships where appropriate
-    - Do not include any ambient and directional lighting
+    - You may include any ambient and directional lighting only to the object
     - Use proper scaling where 1 unit = approximately 1/10th of the scene width
-    - Do not include a ground/floor plane for context
+    - DO NOT include a ground/floor plane for context
     - The product should be ready to be placed in a glass display container
-    - If you do not return the group, the app will crash with: TypeError: Cannot read properties of undefined (reading 'traverse'), So returning root is REQUIRED.
+    - Return the group, otherwise the app will crash with. So returning root is REQUIRED.
 
 
     ## RESPONSE FORMAT:
     Your response must contain only valid JavaScript code for the Three.js object with proper initialization. 
     Include code comments explaining your reasoning for major design decisions.
-    Wrap your entire code in backticks with the javascript identifier: ```javascript"""
+    Return your code without any backticks for formatting
+    
+    ## GOLDEN EXAMPLE (FORMAT + QUALITY REFERENCE):
+    This example shows the REQUIRED structure and finish. Do NOT copy the specific product details.
+    Use it only as a template for: clean hierarchy, procedural CanvasTexture usage, consistent positioning,
+    and ALWAYS ending with `return root;`.
+
+    Example (do not copy verbatim, adapt to the image):
+    - const root = new THREE.Group();
+    - create small CanvasTexture helpers (optional)
+    - build 2–4 main subgroups (e.g., packagingGroup, contentsGroup, accessoryGroup)
+    - root.add(each subgroup)
+    - normalize scale + center with Box3
+    - return root;
+
+    ## GLASS CONTAINER FIT (CRITICAL, MUST PASS):
+The object MUST fit inside the existing glass cylinder container in the scene.
+
+Container inner dimensions:
+- Inner radius: 2.5 units (X/Z)
+- Inner height: 5.2 units (Y)
+
+REQUIREMENTS:
+- After building geometry, you MUST normalize the model so it fits within:
+  - maxRadius <= 2.25 (in X/Z), computed from bounding box
+  - height <= 4.8 (in Y)
+- The model must sit on the container base:
+  - After normalization, the lowest point must be at y = 0
+- The model must be centered:
+  - Center X and Z at 0 (use Box3 center)
+- Leave safety clearance:
+  - At least 0.25 units of radial clearance from the glass walls
+  - At least 0.2 units clearance from top
+
+IMPLEMENTATION (REQUIRED):
+- Compute bounds with `const bounds = new THREE.Box3().setFromObject(root);`
+- Compute `size = bounds.getSize(new THREE.Vector3())` and `center = bounds.getCenter(new THREE.Vector3())`
+- Center X/Z: `root.position.x -= center.x; root.position.z -= center.z;`
+- Place on floor: `root.position.y -= bounds.min.y;`
+- Compute scale factor:
+  - `const maxRadius = Math.max(size.x, size.z) * 0.5;`
+  - `const scaleToRadius = 2.25 / maxRadius;`
+  - `const scaleToHeight = 4.8 / size.y;`
+  - `const s = Math.min(scaleToRadius, scaleToHeight, 1.0);`
+  - `root.scale.setScalar(s);`
+- Recompute bounds after scaling and re-apply floor placement if needed.
+- Final line MUST be: `return root;`
+
+    
+    """
 
     return system_prompt
-
-
-base_prompt = """Transform this 2D image into an interactive Three.js 3D object. 
-
-Give me code that:
-1. Generates correct 3D geometries based on the shapes in the image
-2. Uses materials that match the colors, styles and textures present in the image
-4. Sets up proper lighting to enhance the 3D effect
-5. Includes subtle animations to bring the scene to life
-
-Return ONLY the JavaScript code that creates the 3D object."""

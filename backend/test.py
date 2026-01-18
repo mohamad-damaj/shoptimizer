@@ -35,22 +35,20 @@ encoded_string = base64.b64encode(response.content).decode("utf-8")
 
 products_dict = {"featured_image": image_url, "image_base64": encoded_string}
 
-result = ShopifySceneGenerationTask.apply_async(
-    args=(1, products_dict, {"product_count": 1})
-)
+result = ShopifyProductTo3DTask.apply_async(args=(1, products_dict))
 
 while not result.ready():
     print("Task is still processing... (polling)")
     time.sleep(5)
-breakpoint()
 
 final = result.result
-raw_metadata = final["metadata"]
+
+raw_code = final["metadata"]
 
 
-js_code = extract_javascript_code(raw_metadata)
+js_code = extract_javascript_code(raw_code)
+
 breakpoint()
-print(final)
 print("--- Extracted JS Code ---")
 print(js_code[:200] + "...")  # Preview
 

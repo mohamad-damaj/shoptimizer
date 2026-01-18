@@ -9,11 +9,8 @@ from backend.utils.redis import redis_service
 
 
 class AsyncClient(Protocol):
-    """Protocol defining the interface that AI client implementations must satisfy."""
 
-    async def send_message(self, message_params: Dict[str, Any]) -> Any:
-        """Send a message to the AI service and return the response."""
-        ...
+    async def send_message(self, message_params: Dict[str, Any]) -> Any: ...
 
 
 class AsyncAITask(Task):
@@ -23,20 +20,16 @@ class AsyncAITask(Task):
 
     @property
     async def client(self) -> AsyncClient:
-        """Get the AI client. This should be implemented by subclasses."""
         raise NotImplementedError
 
     def run(self, *args, **kwargs):
-        """Run the coroutine in an event loop."""
         return asyncio.run(self._run_async(*args, **kwargs))
 
     async def _run_async(self, *args, **kwargs):
-        """This should be implemented by subclasses."""
         raise NotImplementedError
 
 
 class GenericPromptTask(AsyncAITask):
-    """Generic task to stream a prompt to an AI model."""
 
     async def _run_async(
         self,
@@ -47,12 +40,10 @@ class GenericPromptTask(AsyncAITask):
         temperature: float = DEFAULT_TEMP,
         additional_params: Optional[Dict[str, Any]] = None,
     ):
-        """Process a prompt with an AI model and stream the response to Redis."""
         try:
-            # Publish start event
             redis_service.publish_start_event(task_id)
 
-            # Prepare the message parameters - this will be modified by subclasses
+            #  message parameters
             message_params = self.prepare_message_params(
                 prompt=prompt,
                 system_prompt=system_prompt,
@@ -61,28 +52,22 @@ class GenericPromptTask(AsyncAITask):
                 additional_params=additional_params,
             )
 
-            # Get client
             client = await self.client
 
-            # Send the message to the AI service
             response = await self.send_message(client, message_params)
 
-            # Extract the response content - subclass responsibility
             content = self.extract_content(response)
 
-            # Prepare final response with metadata
             final_response = self.prepare_final_response(task_id, response, content)
 
-            # Publish completion event
             redis_service.publish_complete_event(task_id, final_response)
 
-            # Store the final response in Redis for retrieval
             redis_service.store_response(task_id, final_response)
 
             return final_response
 
         except Exception as e:
-            # Prepare error response
+
             error_response = {
                 "status": "error",
                 "error": str(e),
@@ -91,11 +76,11 @@ class GenericPromptTask(AsyncAITask):
             }
 
             try:
-                # Publish error event and store the error response
+
                 redis_service.publish_error_event(task_id, e)
                 redis_service.store_response(task_id, error_response)
             except Exception:
-                pass  # Ignore Redis errors at this point
+                pass
 
             return error_response
 
@@ -107,11 +92,7 @@ class GenericPromptTask(AsyncAITask):
         temperature: float = DEFAULT_TEMP,
         additional_params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Prepare the message parameters for the AI service.
-
-        This should be implemented by subclasses to format the prompt according to
-        the requirements of their specific AI service.
-        """
+        """Prepare the message parameters for the AI service."""
         raise NotImplementedError
 
     async def send_message(self, client: Any, message_params: Dict[str, Any]) -> Any:

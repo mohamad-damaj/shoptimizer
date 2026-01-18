@@ -1,7 +1,7 @@
 # Run Celery worker for processing Claude requests
 import os
 
-from backend.core.celery_app import celery_app
+from backend.utils.celery_app import celery_app
 
 
 def run_worker():

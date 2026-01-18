@@ -174,14 +174,14 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({ product, onNext, onPrev
         const creatorFunction = new Function('THREE', product.aiCode);
         const newModel = creatorFunction(THREE);
         
-        newModel.traverse((node: any) => {
+        newModel.traverse((node) => {
             if (node.isMesh) {
                 node.geometry.computeBoundingSphere();
                 node.geometry.computeBoundingBox();
                 node.frustumCulled = false; 
                 node.castShadow = true;
                 node.receiveShadow = true;
-                node.renderOrder = 1; // RENDER BEFORE GLASS
+                node.renderOrder = 1; // we render object before glass
                 if (node.material) {
                     node.material.side = THREE.DoubleSide;
                     if (node.material.transparent) {

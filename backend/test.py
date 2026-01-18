@@ -4,11 +4,11 @@ import time
 
 import requests
 
-from backend.claude.scene_generation import (
+from app.claude.scene_generation import (
     ShopifyProductTo3DTask,
     ShopifySceneGenerationTask,
 )
-from backend.utils.redis import redis_service
+from app.utils.redis import redis_service
 
 
 def extract_javascript_code(metadata_string):

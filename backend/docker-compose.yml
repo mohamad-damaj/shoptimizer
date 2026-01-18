@@ -1,18 +1,20 @@
 services:
-  api:
-    build: .
-    container_name: fastapi-app
-    ports:
-      - "8000:8000" # FastAPI default port, access at http://localhost:8000
-    depends_on:
-      - redis
-    env_file:
-      - .env
+  # api:
+  #   build: .
+  #   container_name: fastapi-app
+  #   ports:
+  #     - "8000:8000" # FastAPI default port, access at http://localhost:8000
+  #   depends_on:
+  #     - redis
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - shoppy_network
   redis:
     image: redis:6.0-alpine
     container_name: redis_broker
     ports:
-      - "6379:6379" # Redis default port, access at redis://localhost:6379
+      - "6379:6379" # Redis default porte, access at redis://localhost:6379
     volumes:
       - redis_data:/data
 
@@ -33,6 +35,11 @@ services:
       - PYTHONPATH=/backend
     env_file:
       - .env
+    networks:
+      - shoppy_network
 
 volumes:
   redis_data:
+
+networks:
+  shoppy_network:

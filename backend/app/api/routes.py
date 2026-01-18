@@ -4,7 +4,6 @@ import uuid
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
 
 from app.claude.scene_generation import ShopifyProductTo3DTask
 from app.utils.redis import redis_service

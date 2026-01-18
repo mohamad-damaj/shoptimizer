@@ -61,7 +61,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
             product_description = product_data.get("description", "")
             product_type = product_data.get("product_type", "")
             product_tags = product_data.get("tags", [])
-            product_image_url = product_data.get("featured_image", "")
+            product_image_url = product_data.get("image_url", "")
 
             if not product_image_url:
                 print("[ERROR] No image URL provided")

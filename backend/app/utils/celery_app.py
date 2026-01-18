@@ -5,13 +5,13 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from celery import Celery
 
-from app.utils.config import settings
+from app.utils.settings import settings
 
 celery_app = Celery(
     "worker",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.claude.scene_generation"],
+    include=["backend.claude.scene_generation"],
 )
 
 # Optional: Configure Celery

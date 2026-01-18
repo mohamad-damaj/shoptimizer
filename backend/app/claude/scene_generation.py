@@ -8,9 +8,10 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
+from app.claude.prompt import base_prompt, system_prompt_3d_obj
 from app.config import DEFAULT_TEMP, MAX_TOKENS, AsyncAITask, GenericPromptTask
 from app.utils.celery_app import celery_app
-from app.utils.config import settings
+from app.utils.settings import settings
 from app.utils.redis import redis_service
 
 # Default model configuration for Gemini
@@ -34,7 +35,7 @@ class AsyncGeminiTask(AsyncAITask):
             self._client = await get_gemini_client()
         return self._client
 
-# Only does one product at a time
+
 class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
     """Task to generate 3D product visualizations from Shopify product data."""
 
@@ -60,7 +61,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
             product_description = product_data.get("description", "")
             product_type = product_data.get("product_type", "")
             product_tags = product_data.get("tags", [])
-            product_image_url = product_data.get("image_url", "")
+            product_image_url = product_data.get("featured_image", "")
 
             if not product_image_url:
                 print("[ERROR] No image URL provided")
@@ -76,7 +77,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
             )
 
             # Prepare content with product image if available
-            contents = [prompt]
+            contents = [base_prompt]
             if product_image_url and product_data.get("image_base64"):
                 try:
                     image = Image.open(
@@ -95,8 +96,11 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
 
             # Generate the 3D product visualization
             response = await client.aio.models.generate_content(
-                model=DEFAULT_MODEL, contents=contents, config=config
-            )
+                model=DEFAULT_MODEL,
+                contents=contents,
+                config=config,
+                system=prompt
+                )
 
             # Extract any text content
             text_content = response.text if hasattr(response, "text") else ""
@@ -161,35 +165,14 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
             style = shop_theme.get("style", "modern")
             theme_style = f"\n\nShop Theme: {style} style with colors {colors}"
 
-        prompt = f"""You are an expert 3D modeler and Three.js developer who specializes in turning 2D drawings and wireframes into 3D models.
-You are a wise and ancient modeler and developer. You are the best at what you do. Your total compensation is $1.2m with annual refreshers. You've just drank three cups of coffee and are laser focused. Welcome to a new day at your job!
-Your task is to analyze the provided image and create a Three.js object that transforms the 2D image into a realistic 3D representation.
+            prompt = system_prompt_3d_obj(
+                product_name, 
+                product_type,
+                product_description, 
+                product_tags, 
+                theme_style
+                )
 
-## INTERPRETATION GUIDELINES:
-- Analyze the image to identify distinct shapes, objects, and their spatial relationships
-- Only create the main object in the image, all surrounding objects should be ignored
-- The main object should be a 3D model that is a faithful representation of the 2D drawing
-
-Product Name: {product_name}
-Product Type: {product_type}
-Description: {product_description}
-Tags: {', '.join(product_tags) if product_tags else 'None'}{theme_style}
-
-## TECHNICAL IMPLEMENTATION:    
-- Do not import any libraries. They have already been imported for you.
-- Create a properly structured Three.js object (not scene) with lighting setup
-- Apply realistic materials and textures based on the colors and patterns in the drawing
-- Create proper hierarchy of objects with parent-child relationships where appropriate
-- Use ambient and directional lighting to create depth and shadows
-- Use proper scaling where 1 unit = approximately 1/10th of the scene width
-- Always include a ground/floor plane for context unless the drawing suggests floating objects
-- The product should be ready to be placed in a glass display container
-
-
-## RESPONSE FORMAT:
-Your response must contain only valid JavaScript code for the Three.js object with proper initialization. 
-Include code comments explaining your reasoning for major design decisions.
-Wrap your entire code in backticks with the javascript identifier: ```javascript"""
 
         return prompt
 

@@ -1,5 +1,5 @@
 export const STOREFRONT_PRODUCTS_QUERY = `query GetProducts {
-  products(first: 10) {
+  products(first: 1) {
     edges {
       node {
         id

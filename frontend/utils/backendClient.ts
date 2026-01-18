@@ -42,7 +42,7 @@ async function FetchTaskStatus(taskId: string) {
 export async function PollTaskId(
   taskId: string,
   maxWaitTime: number = 300000, // 5 minutes default
-  pollInterval: number = 2000, // Poll every 2 seconds
+  pollInterval: number = 1000, // Poll every 2 seconds
 ) {
   const startTime = Date.now();
   let elapsedTime = 0;

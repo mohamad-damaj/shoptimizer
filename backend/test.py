@@ -26,6 +26,7 @@ def extract_javascript_code(metadata_string):
 image_url = "https://www.houseplant.com/cdn/shop/files/Q42024_PDP_Standing_Ashtray_1_1512x.jpg?v=1759936813"
 
 response = requests.get(image_url)
+print(response.content)
 response.raise_for_status()
 
 encoded_string = base64.b64encode(response.content).decode("utf-8")

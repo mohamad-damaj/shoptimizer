@@ -1,21 +1,13 @@
 """FastAPI routes for Shoptimizer backend."""
 
 import uuid
+from logging import Logger
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, status
-
+from app.api.models import GenerateProduct3DRequest, TaskResponse, TaskResultResponse
 from app.claude.scene_generation import ShopifyProductTo3DTask
 from app.utils.redis import redis_service
-from app.api.models import (
-    GenerateProduct3DRequest,
-    TaskResponse,
-    TaskResultResponse,
-)
-
-from logging import Logger
-
-
+from fastapi import APIRouter, HTTPException, status
 
 router = APIRouter(prefix="/api", tags=["generation"])
 
@@ -89,40 +81,42 @@ async def generate_product_3d(request: GenerateProduct3DRequest) -> TaskResponse
             detail=f"Failed to queue task: {str(e)}",
         )
 
+
 # SSE endpoint for frontend to retrieve value from Redis as workers
 @router.get("/task-stream/{task_id}")
 async def stream_task_result(task_id: str):
     """
     Stream task results via Server-Sent Events (SSE).
-    
+
     Client connects once and receives real-time updates as task progresses.
     Connection closes automatically when task completes or fails.
     """
+
     async def event_generator():
         # Poll Redis, but only send updates when status changes
         previous_status = None
         max_wait_time = 3600  # 1 hour timeout
         start_time = asyncio.get_event_loop().time()
-        
+
         while True:
             # Timeout check
             if asyncio.get_event_loop().time() - start_time > max_wait_time:
                 yield f"data: {json.dumps({'status': 'timeout', 'message': 'Task timed out'})}\n\n"
                 break
-            
+
             try:
                 # Get current result from Redis
                 result_json = redis_service.get_value(f"task_result:{task_id}")
-                
+
                 if result_json:
                     result = json.loads(result_json)
                     current_status = result.get("status")
-                    
+
                     # Only send if status changed or first time
                     if current_status != previous_status:
                         yield f"data: {json.dumps(result)}\n\n"
                         previous_status = current_status
-                        
+
                         # Close connection when task is done
                         if current_status in ["completed", "failed"]:
                             break
@@ -131,21 +125,21 @@ async def stream_task_result(task_id: str):
                     if previous_status is None:
                         yield f"data: {json.dumps({'status': 'queued', 'message': 'Task queued, processing...', 'task_id': task_id})}\n\n"
                         previous_status = "queued"
-                
+
                 # Wait before checking again
                 await asyncio.sleep(0.5)
-                
+
             except Exception as e:
                 yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
                 break
-    
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # Disable buffering in nginx
-        }
+        },
     )
 
 
@@ -190,7 +184,6 @@ async def get_task_result(task_id: str) -> TaskResultResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve task result: {str(e)}",
         )
-
 
 
 @router.delete("/task/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

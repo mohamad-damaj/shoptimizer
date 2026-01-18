@@ -12,7 +12,7 @@ class AsyncClient(Protocol):
     async def send_message(self, message_params: Dict[str, Any]) -> Any: ...
 
 
-class AsyncAITask(Task):
+class AITaskAsync(Task):
     """Base Celery tasks class that use async functions."""
 
     _client = None
@@ -28,7 +28,7 @@ class AsyncAITask(Task):
         raise NotImplementedError
 
 
-class GenericPromptTask(AsyncAITask):
+class GenericPromptTask(AITaskAsync):
 
     async def _run_async(
         self,

@@ -264,9 +264,7 @@ const ProductBrowser: React.FC<ProductBrowserProps> = ({
 // --- PARENT COMPONENT: DATA MANAGER ---
 export default function ScenePage() {
   //   const searchParams = useSearchParams();
-  console.log("what is happening????");
   useEffect(() => {
-    console.log("insdie of useeffect");
     const storefrontUrl = "w7vgar-u1.myshopify.com";
     const accessToken = "0a80911fde80bbbb611d613777e992ab";
     console.log("Storefront URL:", storefrontUrl);
@@ -331,7 +329,6 @@ export default function ScenePage() {
       }
     };
 
-    console.log("heyeheeheh");
     if (storefrontUrl && accessToken) {
       fetchStorefrontData();
     }

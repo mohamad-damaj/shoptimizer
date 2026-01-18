@@ -78,6 +78,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
 
             # Prepare content with product image if available
             contents = [base_prompt]
+            contents = [base_prompt]
             if product_image_url and product_data.get("image_base64"):
                 try:
                     image = Image.open(
@@ -87,14 +88,14 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
                 except Exception as e:
                     print(f"[WARNING] Could not load product image: {str(e)}")
 
-            # Create config for image generation
+            # config
             config = types.GenerateContentConfig(
                 response_modalities=["Text"],
                 temperature=temperature,
                 max_output_tokens=max_tokens,
             )
 
-            # Generate the 3D product visualization
+            # we generate the 3D product visualization
             response = await client.aio.models.generate_content(
                 model=DEFAULT_MODEL,
                 contents=contents,

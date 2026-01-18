@@ -78,7 +78,6 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
 
             # Prepare content with product image if available
             contents = [base_prompt]
-            contents = [base_prompt]
             if product_image_url and product_data.get("image_base64"):
                 try:
                     image = Image.open(

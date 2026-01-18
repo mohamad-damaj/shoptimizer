@@ -3,6 +3,7 @@ import base64
 import json
 from io import BytesIO
 from typing import Any, Dict, List, Optional
+import requests
 
 from app.claude.prompt import system_prompt_3d_obj
 from app.config import DEFAULT_TEMP, MAX_TOKENS, AITaskAsync, GenericPromptTask
@@ -77,13 +78,17 @@ class ShopifyProductTo3DTask(GenericPromptTask, GeminiTaskAsync):
 
             # Prepare content with product image if available
             contents = [prompt]
-            if product_image_url and product_data.get("image_base64"):
+            if product_image_url:
                 try:
+                    response = requests.get(product_image_url)
+                    response.raise_for_status()
+
                     image = Image.open(
-                        BytesIO(base64.b64decode(product_data["image_base64"]))
+                        BytesIO(base64.b64decode(base64.b64encode(response.content).decode("utf-8")))
                     )
                     contents.append(image)
                 except Exception as e:
+                    raise e
                     print(f"[WARNING] Could not load product image: {str(e)}")
 
             # config

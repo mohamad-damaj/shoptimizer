@@ -2,8 +2,14 @@
 
 import React, { Suspense, useState, useEffect, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Environment, Html, PerspectiveCamera } from "@react-three/drei";
+import {
+  OrbitControls,
+  Environment,
+  Html,
+  PerspectiveCamera,
+} from "@react-three/drei";
 import * as THREE from "three";
+import { GenerateProduct3D, PollTaskId } from "@/utils/backendClient";
 
 interface ProductData {
   id: number;
@@ -194,9 +200,7 @@ function Scene({ product }: { product: ProductData }) {
 function Loader() {
   return (
     <Html center>
-      <div style={{ color: "#6a6560", fontSize: "18px" }}>
-        Loading...
-      </div>
+      <div style={{ color: "#6a6560", fontSize: "18px" }}>Loading...</div>
     </Html>
   );
 }
@@ -254,7 +258,8 @@ const sampleProducts: ProductData[] = [
   {
     id: 1,
     title: "Geometric Cube",
-    description: "A simple rotating cube rendered in deep blue with metallic finish.",
+    description:
+      "A simple rotating cube rendered in deep blue with metallic finish.",
     aiCode: `
       const group = new THREE.Group();
       const geometry = new THREE.BoxGeometry(2, 2, 2);
@@ -271,7 +276,8 @@ const sampleProducts: ProductData[] = [
   {
     id: 2,
     title: "Golden Torus Knot",
-    description: "A mathematical marvel rendered in brushed gold with complex topology.",
+    description:
+      "A mathematical marvel rendered in brushed gold with complex topology.",
     aiCode: `
       const group = new THREE.Group();
       const geo = new THREE.TorusKnotGeometry(0.7, 0.25, 128, 32);
@@ -289,7 +295,8 @@ const sampleProducts: ProductData[] = [
   {
     id: 3,
     title: "Crimson Sphere",
-    description: "A smooth metallic sphere with high reflectivity in rich crimson.",
+    description:
+      "A smooth metallic sphere with high reflectivity in rich crimson.",
     aiCode: `
       const group = new THREE.Group();
       const geometry = new THREE.SphereGeometry(1.5, 32, 32);
@@ -358,7 +365,8 @@ const sampleProducts: ProductData[] = [
   {
     id: 7,
     title: "Teal Torus",
-    description: "A classic torus ring in smooth teal with subtle metallic sheen.",
+    description:
+      "A classic torus ring in smooth teal with subtle metallic sheen.",
     aiCode: `
       const group = new THREE.Group();
       const geometry = new THREE.TorusGeometry(1, 0.4, 16, 100);
@@ -419,9 +427,10 @@ export default function ScenePage() {
               "X-Shopify-Storefront-Access-Token": accessToken,
             },
             body: JSON.stringify({
+              // TODO: fix this and change to constant in queries.ts
               query: `
                 query GetProducts {
-                  products(first: 10) {
+                  products(first: 1) {
                     edges {
                       node {
                         id
@@ -438,11 +447,13 @@ export default function ScenePage() {
               `,
               variables: {},
             }),
-          }
+          },
         );
 
         if (!shopifyResponse.ok) {
-          throw new Error(`Shopify API error! status: ${shopifyResponse.status}`);
+          throw new Error(
+            `Shopify API error! status: ${shopifyResponse.status}`,
+          );
         }
 
         const shopifyData = await shopifyResponse.json();
@@ -450,110 +461,116 @@ export default function ScenePage() {
 
         if (!shopifyData?.data?.products?.edges) {
           throw new Error(
-            `Invalid Shopify response structure: ${JSON.stringify(shopifyData)}`
+            `Invalid Shopify response structure: ${JSON.stringify(shopifyData)}`,
           );
         }
 
-        // Process each product and generate 3D models
-        const processedProducts: ProductData[] = [];
-        let counter = 1;
+        // ✅ STEP 1: Queue ALL tasks in parallel (don't wait)
+        const queuedTasks = shopifyData.data.products.edges.map(
+          async (item, index) => {
+            try {
+              const product = item.node;
+              console.log(`[${index + 1}] 🔄 Queuing: ${product.title}`);
 
-        for (const item of shopifyData.data.products.edges) {
-          const product = item.node;
-          console.log(`Processing product ${counter}:`, product.title);
+              const backendResponse = await GenerateProduct3D({
+                id: product.id,
+                title: product.title,
+                description: product.description,
+                featured_image: product.featuredImage,
+              });
 
+              console.log(
+                `[${index + 1}] ✓ Task queued: ${backendResponse.task_id}`,
+              );
+
+              return {
+                index: index + 1,
+                product,
+                taskId: backendResponse.task_id,
+              };
+            } catch (error) {
+              console.error(`[${index + 1}] ❌ Failed to queue:`, error);
+              return null;
+            }
+          },
+        );
+
+        // Wait for all tasks to be queued
+        const allQueuedTasks = await Promise.all(queuedTasks);
+        const validTasks = allQueuedTasks.filter((task) => task !== null);
+
+        // ✅ STEP 2: Poll ALL tasks in parallel (async polling)
+        const pollingPromises = validTasks.map(async (task) => {
           try {
-            // Map Shopify product to backend format
-            const productData = {
-              id: product.id,
-              title: product.title,
-              description: product.description,
-              featured_image: product.featuredImage,
+            console.log(`[${task.index}] 🔄 Polling task: ${task.taskId}`);
+
+            const generatedResponse = await PollTaskId(task.taskId);
+
+            console.log(`[${task.index}] ✓ Task completed`);
+
+            return {
+              index: task.index,
+              product: task.product,
+              taskId: task.taskId,
+              generatedResponse,
             };
-
-            // Call your backend to generate 3D model
-            // Replace these with your actual API functions
-            const backendResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate-product-3d`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({"product_data": productData}),
-            }).then(res => res.json());
-
-            console.log(`Backend response for ${product.title}:`, backendResponse);
-
-            // Poll for task completion
-            const taskId = backendResponse.task_id;
-            let generatedResponse = null;
-            let attempts = 0;
-            const maxAttempts = 30;
-
-            while (attempts < maxAttempts) {
-              const pollResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/task-result/${taskId}`)
-                .then(res => res.json());
-
-              if (pollResponse.status === 'success') {
-                generatedResponse = pollResponse;
-                break;
-              } else if (pollResponse.status === 'failed') {
-                throw new Error('3D generation failed');
-              }
-
-              // Wait 2 seconds before next poll
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              attempts++;
-            }
-
-            if (!generatedResponse) {
-              throw new Error('3D generation timeout');
-            }
-
-            console.log(`Generated 3D model for ${product.title}`);
-
-            // Extract AI code from response
-            let aiCode = '';
-            if (generatedResponse?.metadata && typeof generatedResponse.metadata === 'string') {
-              aiCode = generatedResponse.metadata;
-            } else if (generatedResponse?.result?.metadata) {
-              aiCode = generatedResponse.result.metadata;
-            }
-
-            processedProducts.push({
-              id: counter,
-              title: product.title,
-              description: product.description || 'No description available',
-              aiCode: aiCode,
-            });
-
-            counter++;
-          } catch (productError) {
-            console.error(`Error processing product ${product.title}:`, productError);
-            
-            // Add fallback product with error state
-            processedProducts.push({
-              id: counter,
-              title: product.title,
-              description: product.description || 'No description available',
-              aiCode: '', // Will show loading/error state
-            });
-            counter++;
+          } catch (error) {
+            console.error(`[${task.index}] ❌ Failed to poll:`, error);
+            return null;
           }
-        }
+        });
 
-        console.log(`Successfully processed ${processedProducts.length} products`);
-        setStorefrontData(processedProducts);
+        // Wait for ALL polling to complete (not sequentially!)
+        const allResults = await Promise.allSettled(pollingPromises);
 
+        // Process results
+        const mutated_response = allResults
+          .map((result) => {
+            if (result.status === "fulfilled" && result.value) {
+              const { index, generatedResponse } = result.value;
+              return {
+                id: index,
+                title: result.value.product.title,
+                description: result.value.product.description,
+                aiCode: generatedResponse?.result?.metadata || "",
+              };
+            }
+            return null;
+          })
+          .filter((item) => item !== null);
+
+        console.log(
+          `✅ Successfully loaded ${mutated_response.length} products`,
+        );
+        // Extract AI code from response
+        // let aiCode = "";
+        // if (
+        //   generatedResponse?.metadata &&
+        //   typeof generatedResponse.metadata === "string"
+        // ) {
+        //   aiCode = generatedResponse.metadata;
+        // } else if (generatedResponse?.result?.metadata) {
+        //   aiCode = generatedResponse.result.metadata;
+        // }
+
+        console.log(
+          `Successfully processed ${mutated_response.length} products`,
+        );
+        setStorefrontData(mutated_response);
       } catch (error) {
-        console.error('Error fetching storefront data:', error);
-        setFetchError(error instanceof Error ? error.message : 'Failed to load products');
+        console.error("Error fetching storefront data:", error);
+        setFetchError(
+          error instanceof Error ? error.message : "Failed to load products",
+        );
 
         // Fallback to sample data
-        console.log('Using sample data as fallback');
+        console.log("Using sample data as fallback");
         setStorefrontData(sampleProducts);
       } finally {
         setLoading(false);
       }
     };
-    console.log(storefrontUrl && accessToken)
+    console.log(storefrontUrl && accessToken);
     if (storefrontUrl && accessToken) {
       fetchStorefrontData();
     }
@@ -564,17 +581,19 @@ export default function ScenePage() {
       <div style={styles.loading}>
         {fetchError ? (
           <>
-            <div style={{ color: '#e74c3c', marginBottom: '10px' }}>
+            <div style={{ color: "#e74c3c", marginBottom: "10px" }}>
               ⚠️ {fetchError}
             </div>
-            <div style={{ fontSize: '14px', color: '#95a5a6' }}>
+            <div style={{ fontSize: "14px", color: "#95a5a6" }}>
               Using sample data
             </div>
           </>
         ) : (
           <>
-            <div style={{ marginBottom: '10px' }}>Loading storefront data...</div>
-            <div style={{ fontSize: '14px', color: '#95a5a6' }}>
+            <div style={{ marginBottom: "10px" }}>
+              Loading storefront data...
+            </div>
+            <div style={{ fontSize: "14px", color: "#95a5a6" }}>
               Fetching products and generating 3D models...
             </div>
           </>
@@ -588,7 +607,9 @@ export default function ScenePage() {
   };
 
   const handlePrev = () => {
-    setCurrentIndex((prev) => (prev - 1 + storefrontData.length) % storefrontData.length);
+    setCurrentIndex(
+      (prev) => (prev - 1 + storefrontData.length) % storefrontData.length,
+    );
   };
 
   return (

@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = Field(default=int(os.getenv("REDIS_PORT", "6379")))
 
     # API keys
-    GOOGLE_API_KEY: Optional[str] = Field(default=os.getenv("GOOGLE_API_KEY", None))
+    GOOGLE_API_KEY: str | None = Field(default=os.getenv("GOOGLE_API_KEY", None))
 
     class Config:
         env_file = ".env"

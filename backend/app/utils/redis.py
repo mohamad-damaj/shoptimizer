@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 from redis import Redis
 
-from app.utils.config import settings
+from app.utils.settings import settings
 
 
 class RedisService:

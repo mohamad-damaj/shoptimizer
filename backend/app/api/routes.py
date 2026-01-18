@@ -53,8 +53,7 @@ async def generate_product_3d(request: GenerateProduct3DRequest) -> TaskResponse
             "description": request.product_data.description or "",
             "product_type": request.product_data.product_type or "",
             "tags": request.product_data.tags or [],
-            "featured_image": request.product_data.featured_image,
-            "image_base64": request.product_data.image_base64,
+            "image_url": request.product_data.featured_image.url,
         }
 
         # Prepare shop theme dict
@@ -66,7 +65,7 @@ async def generate_product_3d(request: GenerateProduct3DRequest) -> TaskResponse
             }
 
         # Create task instance and queue it
-        task = ShopifyProductTo3DTask()
+        task = ShopifyProductTo3DTask
         celery_task = task.apply_async(
             args=(
                 task_id,
@@ -74,8 +73,7 @@ async def generate_product_3d(request: GenerateProduct3DRequest) -> TaskResponse
                 shop_theme,
                 request.max_tokens,
                 request.temperature,
-            ),
-            task_id=task_id,
+            )
         )
 
         return TaskResponse(
@@ -89,6 +87,65 @@ async def generate_product_3d(request: GenerateProduct3DRequest) -> TaskResponse
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to queue task: {str(e)}",
         )
+
+# SSE endpoint for frontend to retrieve value from Redis as workers
+@router.get("/task-stream/{task_id}")
+async def stream_task_result(task_id: str):
+    """
+    Stream task results via Server-Sent Events (SSE).
+    
+    Client connects once and receives real-time updates as task progresses.
+    Connection closes automatically when task completes or fails.
+    """
+    async def event_generator():
+        # Poll Redis, but only send updates when status changes
+        previous_status = None
+        max_wait_time = 3600  # 1 hour timeout
+        start_time = asyncio.get_event_loop().time()
+        
+        while True:
+            # Timeout check
+            if asyncio.get_event_loop().time() - start_time > max_wait_time:
+                yield f"data: {json.dumps({'status': 'timeout', 'message': 'Task timed out'})}\n\n"
+                break
+            
+            try:
+                # Get current result from Redis
+                result_json = redis_service.get_value(f"task_result:{task_id}")
+                
+                if result_json:
+                    result = json.loads(result_json)
+                    current_status = result.get("status")
+                    
+                    # Only send if status changed or first time
+                    if current_status != previous_status:
+                        yield f"data: {json.dumps(result)}\n\n"
+                        previous_status = current_status
+                        
+                        # Close connection when task is done
+                        if current_status in ["completed", "failed"]:
+                            break
+                else:
+                    # Task not found yet (might be queuing)
+                    if previous_status is None:
+                        yield f"data: {json.dumps({'status': 'queued', 'message': 'Task queued, processing...', 'task_id': task_id})}\n\n"
+                        previous_status = "queued"
+                
+                # Wait before checking again
+                await asyncio.sleep(0.5)
+                
+            except Exception as e:
+                yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+                break
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable buffering in nginx
+        }
+    )
 
 
 @router.get("/task-result/{task_id}", response_model=TaskResultResponse)
@@ -107,7 +164,7 @@ async def get_task_result(task_id: str) -> TaskResultResponse:
     """
     try:
         # Try to retrieve the result from Redis
-        result_json = redis_service.get_value(f"task_result:{task_id}")
+        result_json = redis_service.get_value(task_id)
 
         if result_json:
             import json
@@ -133,6 +190,7 @@ async def get_task_result(task_id: str) -> TaskResultResponse:
         )
 
 
+
 @router.delete("/task/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_task(task_id: str) -> None:
     """
@@ -145,7 +203,7 @@ async def cancel_task(task_id: str) -> None:
         HTTPException: If task cancellation fails
     """
     try:
-        from backend.utils.celery_app import celery_app
+        from app.utils.celery_app import celery_app
 
         # Revoke the Celery task
         celery_app.control.revoke(task_id, terminate=True)

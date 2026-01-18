@@ -1,3 +1,6 @@
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+
 class ProductData(BaseModel):
     """Product data for 3D generation."""
 
@@ -5,9 +8,12 @@ class ProductData(BaseModel):
     description: Optional[str] = None
     product_type: Optional[str] = None
     tags: Optional[list[str]] = None
-    featured_image: str
-    image_base64: Optional[str] = None
+    featured_image: FeaturedImage
     id: Optional[str] = None
+
+class FeaturedImage(BaseModel):
+    url: str
+    alt_text: Optional[str] = None
 
 
 class ShopTheme(BaseModel):

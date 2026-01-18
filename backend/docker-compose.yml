@@ -2,6 +2,12 @@ services:
   api:
     build: .
     container_name: fastapi-app
+    ports:
+      - "8000:8000" # FastAPI default port, access at http://localhost:8000
+    depends_on:
+      - redis
+    env_file:
+      - .env
   redis:
     image: redis:6.0-alpine
     container_name: redis_broker
@@ -23,7 +29,8 @@ services:
       - REDIS_PORT=6379
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/backend
     env_file:
       - .env
 

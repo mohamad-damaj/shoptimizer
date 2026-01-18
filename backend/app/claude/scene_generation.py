@@ -34,7 +34,7 @@ class AsyncGeminiTask(AsyncAITask):
             self._client = await get_gemini_client()
         return self._client
 
-
+# Only does one product at a time
 class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
     """Task to generate 3D product visualizations from Shopify product data."""
 
@@ -60,7 +60,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
             product_description = product_data.get("description", "")
             product_type = product_data.get("product_type", "")
             product_tags = product_data.get("tags", [])
-            product_image_url = product_data.get("featured_image", "")
+            product_image_url = product_data.get("image_url", "")
 
             if not product_image_url:
                 print("[ERROR] No image URL provided")

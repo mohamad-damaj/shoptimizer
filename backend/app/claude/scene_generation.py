@@ -14,7 +14,7 @@ from google.genai import types
 from PIL import Image
 
 # Default model configuration for Gemini
-DEFAULT_MODEL = "gemini-3-flash-preview"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 
 # Create Gemini client
@@ -125,7 +125,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
             }
 
             # Publish completion event
-            redis_service.publish_complete_event(task_id, final_response)
+            redis_service.set_complete_value(task_id, final_response)
 
             # Store the final response in Redis for retrieval
             redis_service.store_response(task_id, final_response)

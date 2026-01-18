@@ -65,11 +65,11 @@ class RedisService:
             task_id, "start", {"task_id": task_id, "timestamp": time.time()}
         )
 
-    def publish_complete_event(
+    def set_complete_value(
         self, task_id: str, response_data: Dict[str, Any]
     ) -> int:
         """Publish a completion event for a task."""
-        return self.publish_event(task_id, "complete", response_data)
+        return self.set_value(task_id, json.dumps(response_data))
 
     def publish_error_event(self, task_id: str, error: Exception) -> int:
         """Publish an error event for a task."""

@@ -13,6 +13,8 @@ from app.api.models import (
     TaskResultResponse,
 )
 
+from logging import Logger
+
 
 
 router = APIRouter(prefix="/api", tags=["generation"])
@@ -163,12 +165,13 @@ async def get_task_result(task_id: str) -> TaskResultResponse:
     """
     try:
         # Try to retrieve the result from Redis
-        result_json = redis_service.get_value(task_id)
-
+        result_json = redis_service.get_value(f"{task_id}")
+        print(f"Retrieved result_json for task_id {task_id}: {result_json}")
         if result_json:
             import json
 
             result = json.loads(result_json)
+            result["metadata"] = result["metadata"].replace("```javascript\n", "")
             return TaskResultResponse(
                 task_id=task_id,
                 status=result.get("status", "unknown"),

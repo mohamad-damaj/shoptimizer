@@ -176,13 +176,10 @@ function Scene({ product }: { product: ProductData }) {
         />
       </mesh>
 
-      {/* Background Elements */}
       <BackgroundDecor />
 
-      {/* Glass Container */}
       <GlassContainer />
-
-      {/* AI-Generated Model */}
+      {console.log(product.aiCode)}
       <Suspense fallback={null}>
         <DynamicModel key={product.id} aiCode={product.aiCode} />
       </Suspense>
@@ -403,39 +400,150 @@ export default function ScenePage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const storefrontUrl = "w7vgar-u1.myshopify.com";
+    const accessToken = "0a80911fde80bbbb611d613777e992ab";
+
+    const fetchStorefrontData = async () => {
       try {
         setLoading(true);
         setFetchError(null);
+        console.log("Fetching storefront data from Shopify...");
 
-        // Replace with your actual endpoint
-        const response = await fetch('/api/products', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+        // Fetch products from Shopify Storefront API
+        const shopifyResponse = await fetch(
+          `https://${storefrontUrl}/api/2026-01/graphql.json`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Storefront-Access-Token": accessToken,
+            },
+            body: JSON.stringify({
+              query: `
+                query GetProducts {
+                  products(first: 10) {
+                    edges {
+                      node {
+                        id
+                        title
+                        description
+                        featuredImage {
+                          url
+                          altText
+                        }
+                      }
+                    }
+                  }
+                }
+              `,
+              variables: {},
+            }),
+          }
+        );
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!shopifyResponse.ok) {
+          throw new Error(`Shopify API error! status: ${shopifyResponse.status}`);
         }
 
-        const data = await response.json();
+        const shopifyData = await shopifyResponse.json();
+        console.log("Shopify response:", shopifyData);
 
-        if (!Array.isArray(data)) {
-          throw new Error('Expected array of products');
+        if (!shopifyData?.data?.products?.edges) {
+          throw new Error(
+            `Invalid Shopify response structure: ${JSON.stringify(shopifyData)}`
+          );
         }
 
-        const validatedProducts = data.map((item, index) => ({
-          id: item.id || index + 1,
-          title: item.title || `Product ${index + 1}`,
-          description: item.description || 'No description available',
-          aiCode: item.aiCode || '',
-        }));
+        // Process each product and generate 3D models
+        const processedProducts: ProductData[] = [];
+        let counter = 1;
 
-        setStorefrontData(validatedProducts);
+        for (const item of shopifyData.data.products.edges) {
+          const product = item.node;
+          console.log(`Processing product ${counter}:`, product.title);
+
+          try {
+            // Map Shopify product to backend format
+            const productData = {
+              id: product.id,
+              title: product.title,
+              description: product.description,
+              featured_image: product.featuredImage,
+            };
+
+            // Call your backend to generate 3D model
+            // Replace these with your actual API functions
+            const backendResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/generate-product-3d`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({"product_data": productData}),
+            }).then(res => res.json());
+
+            console.log(`Backend response for ${product.title}:`, backendResponse);
+
+            // Poll for task completion
+            const taskId = backendResponse.task_id;
+            let generatedResponse = null;
+            let attempts = 0;
+            const maxAttempts = 30;
+
+            while (attempts < maxAttempts) {
+              const pollResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/task-result/${taskId}`)
+                .then(res => res.json());
+
+              if (pollResponse.status === 'success') {
+                generatedResponse = pollResponse;
+                break;
+              } else if (pollResponse.status === 'failed') {
+                throw new Error('3D generation failed');
+              }
+
+              // Wait 2 seconds before next poll
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              attempts++;
+            }
+
+            if (!generatedResponse) {
+              throw new Error('3D generation timeout');
+            }
+
+            console.log(`Generated 3D model for ${product.title}`);
+
+            // Extract AI code from response
+            let aiCode = '';
+            if (generatedResponse?.metadata && typeof generatedResponse.metadata === 'string') {
+              aiCode = generatedResponse.metadata;
+            } else if (generatedResponse?.result?.metadata) {
+              aiCode = generatedResponse.result.metadata;
+            }
+
+            processedProducts.push({
+              id: counter,
+              title: product.title,
+              description: product.description || 'No description available',
+              aiCode: aiCode,
+            });
+
+            counter++;
+          } catch (productError) {
+            console.error(`Error processing product ${product.title}:`, productError);
+            
+            // Add fallback product with error state
+            processedProducts.push({
+              id: counter,
+              title: product.title,
+              description: product.description || 'No description available',
+              aiCode: '', // Will show loading/error state
+            });
+            counter++;
+          }
+        }
+
+        console.log(`Successfully processed ${processedProducts.length} products`);
+        setStorefrontData(processedProducts);
+
       } catch (error) {
-        console.error('Error fetching products:', error);
+        console.error('Error fetching storefront data:', error);
         setFetchError(error instanceof Error ? error.message : 'Failed to load products');
 
         // Fallback to sample data
@@ -445,8 +553,10 @@ export default function ScenePage() {
         setLoading(false);
       }
     };
-
-    fetchProducts();
+    console.log(storefrontUrl && accessToken)
+    if (storefrontUrl && accessToken) {
+      fetchStorefrontData();
+    }
   }, []);
 
   if (loading || storefrontData.length === 0) {
@@ -462,7 +572,12 @@ export default function ScenePage() {
             </div>
           </>
         ) : (
-          'Loading storefront data...'
+          <>
+            <div style={{ marginBottom: '10px' }}>Loading storefront data...</div>
+            <div style={{ fontSize: '14px', color: '#95a5a6' }}>
+              Fetching products and generating 3D models...
+            </div>
+          </>
         )}
       </div>
     );

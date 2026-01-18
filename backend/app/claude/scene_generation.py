@@ -5,7 +5,7 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 from app.claude.prompt import system_prompt_3d_obj
-from app.config import DEFAULT_TEMP, MAX_TOKENS, AsyncAITask, GenericPromptTask
+from app.config import DEFAULT_TEMP, MAX_TOKENS, AITaskAsync, GenericPromptTask
 from app.utils.celery_app import celery_app
 from app.utils.redis import redis_service
 from app.utils.settings import settings
@@ -14,7 +14,7 @@ from google.genai import types
 from PIL import Image
 
 # Default model configuration for Gemini
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3-flash-preview"
 
 
 # Create Gemini client
@@ -23,8 +23,8 @@ async def get_gemini_client():
     return client
 
 
-class AsyncGeminiTask(AsyncAITask):
-    """Base class for Gemini Celery tasks that use async functions."""
+class GeminiTaskAsync(AITaskAsync):
+    """Base class for Gemini Celery tasks that use an async functions."""
 
     _client = None
 
@@ -35,7 +35,7 @@ class AsyncGeminiTask(AsyncAITask):
         return self._client
 
 
-class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
+class ShopifyProductTo3DTask(GenericPromptTask, GeminiTaskAsync):
     """Task to generate 3D product visualizations from Shopify product data."""
 
     async def _run_async(
@@ -192,7 +192,7 @@ class ShopifyProductTo3DTask(GenericPromptTask, AsyncGeminiTask):
         return result
 
 
-class ShopifySceneGenerationTask(GenericPromptTask, AsyncGeminiTask):
+class ShopifySceneGenerationTask(GenericPromptTask, GeminiTaskAsync):
     """Task to generate a themed 3D scene for Shopify products."""
 
     async def _run_async(
@@ -389,7 +389,7 @@ Return the complete JavaScript code for this Three.js scene."""
         return result
 
 
-# class ShopifyProductIntegrationTask(GenericPromptTask, AsyncGeminiTask):
+# class ShopifyProductIntegrationTask(GenericPromptTask, GeminiTaskAsync):
 #     """Task to integrate generated products into the scene."""
 
 #     async def _run_async(
